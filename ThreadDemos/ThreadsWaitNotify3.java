@@ -112,6 +112,7 @@ class ThreadsWaitNotify3{
         Thread inputThread = new Thread(inputHelper);
         Thread outputThread = new Thread(outputHelper);
 
+
         inputThread.start();
         outputThread.start();
     }

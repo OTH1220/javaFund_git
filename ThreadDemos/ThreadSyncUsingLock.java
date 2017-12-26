@@ -1,31 +1,60 @@
+import java.util.concurrent.locks.*;
+
+//定义代表资源的类，用人表示，带有名字和性别属性
 class Resource_Person{
     private String name;
     private String gender;
-    private boolean ioSwithcher = false;
+    private boolean ioSwithcher = false; //实现信息 录入/输出 的调节器，当人的信息录入完毕后为false，需要录入时为true
+    private int count; //生产数量的计数器
+    //用Lock替代Synchronize代码块实现同步
+    private final ReentrantLock lock = new ReentrantLock();
+    //使用Lock产生的线程监视器，
+    private Condition setCondition = lock.newCondition();
+    private Condition getCondition = lock.newCondition();
 
-    public synchronized void setInfo(String name, String gender){
-        while(ioSwithcher)
-            try{this.wait();}catch(InterruptedException e){}
-        this.name = name;
-        this.gender = gender;
-        ioSwithcher = true;
-        this.notifyAll();
+    // public synchronized void setInfo(String name, String gender){
+    public void setInfo(String name, String gender){
+        lock.lock(); //使用Lock，一定要用try-finally处理，并在finally中释放锁
+        try{
+            while(ioSwithcher){
+                // try{this.wait();}catch(InterruptedException e){}
+                try{setCondition.await();}catch(InterruptedException e){}
+            }
+            count++;
+            this.name = name;
+            this.gender = gender;
+            System.out.println(Thread.currentThread().getName()+": "+this.name+"--"+this.gender+"生产："+count);
+            ioSwithcher = true;
+            // this.notifyAll();
+            getCondition.signal();
+        }finally{
+            lock.unlock();
+        }
     }
 
-    public synchronized void getInfo(){
-        while(!ioSwithcher)
-            try{this.wait();}catch(InterruptedException e){}
-        System.out.println(this.name+"***LOCK***"+this.gender);
-        ioSwithcher=false;
-        this.notifyAll();
+    //public synchronized void getInfo(){
+    public void getInfo(){
+        lock.lock();
+        try {
+            while(!ioSwithcher){
+                // try{this.wait();}catch(InterruptedException e){}
+                try{getCondition.await();}catch(InterruptedException e){}
+            }
+            System.out.println(Thread.currentThread().getName()+": "+this.name+"--"+this.gender+"消费："+count);
+            ioSwithcher=false;
+            // this.notifyAll();
+            setCondition.signal();
+        }finally{
+            lock.unlock();
+        }
     }
 
 }
 
 class OutputHelper implements Runnable{
-    Resource_Person resource_person = null;
+    private Resource_Person resource_person = null;
 
-    public OutputHelper(Resource_Person rp){
+    OutputHelper(Resource_Person rp){
         this.resource_person = rp;
     }
 
@@ -37,10 +66,10 @@ class OutputHelper implements Runnable{
 }
 
 class InputHelper implements Runnable{
-    Resource_Person resource_person = null;
+    private Resource_Person resource_person = null;
     int resource_switcher = 0;
 
-    public InputHelper(Resource_Person rp){
+    InputHelper(Resource_Person rp){
         this.resource_person = rp;
     }
 
